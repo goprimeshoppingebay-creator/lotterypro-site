@@ -210,6 +210,12 @@ Object.assign(STR.es, { faq_q1: "¿Los números son aleatorios?", faq_a1: "Sí. 
 Object.assign(STR.fr, { faq_q1: "Les numéros sont-ils aléatoires ?", faq_a1: "Oui. Chaque tirage est indépendant et totalement aléatoire. Aucune stratégie ne garantit de gains.", faq_q2: "Les stats aident-elles à gagner ?", faq_a2: "Elles aident à choisir de façon informée et ludique, mais ne changent pas les vraies probabilités.", faq_q3: "Les résultats sont-ils officiels ?", faq_a3: "Nous affichons les résultats pour ta commodité. Vérifie toujours sur le site officiel.", faq_q4: "Comment fonctionne l'abonnement ?", faq_a4: "Il débloque des outils supplémentaires. Tu peux annuler à tout moment.", gl1t: "Rollover", gl1d: "Quand personne ne gagne le jackpot et qu'il passe au tirage suivant.", gl2t: "Système / Combinaison", gl2d: "Jouer plus de numéros en combinaisons pour couvrir plus de possibilités.", gl3t: "Bonus", gl3d: "Numéro supplémentaire tiré qui augmente les gains dans certains rangs.", gl4t: "Jackpot", gl4d: "Le gros lot, gagné en trouvant tous les numéros." });
 Object.assign(STR.de, { faq_q1: "Sind die Zahlen zufällig?", faq_a1: "Ja. Jede Ziehung ist unabhängig und völlig zufällig. Keine Strategie garantiert Gewinne.", faq_q2: "Helfen Statistiken beim Gewinnen?", faq_a2: "Sie helfen, informiert und mit Spaß zu wählen, ändern aber nicht die echten Chancen.", faq_q3: "Sind die Ergebnisse offiziell?", faq_a3: "Wir zeigen Ergebnisse zur Bequemlichkeit. Prüfe immer die offizielle Lotterie-Seite.", faq_q4: "Wie funktioniert das Abo?", faq_a4: "Es schaltet Extra-Werkzeuge frei. Du kannst jederzeit kündigen.", gl1t: "Rollover", gl1d: "Wenn niemand den Jackpot gewinnt und er in die nächste Ziehung übergeht.", gl2t: "System / Vollsystem", gl2d: "Mehr Zahlen in Kombinationen spielen, um mehr Möglichkeiten abzudecken.", gl3t: "Bonus", gl3d: "Eine zusätzlich gezogene Zahl, die Gewinne in einigen Klassen erhöht.", gl4t: "Jackpot", gl4d: "Der Hauptgewinn, erzielt durch Treffen aller Zahlen." });
 Object.assign(STR.it, { faq_q1: "I numeri sono casuali?", faq_a1: "Sì. Ogni estrazione è indipendente e totalmente casuale. Nessuna strategia garantisce premi.", faq_q2: "Le statistiche aiutano a vincere?", faq_a2: "Aiutano a scegliere in modo informato e divertente, ma non cambiano le probabilità reali.", faq_q3: "I risultati sono ufficiali?", faq_a3: "Mostriamo i risultati per tua comodità. Verifica sempre sul sito ufficiale della lotteria.", faq_q4: "Come funziona l'abbonamento?", faq_a4: "Sblocca strumenti extra. Puoi annullare quando vuoi.", gl1t: "Rollover", gl1d: "Quando nessuno vince il jackpot e passa all'estrazione successiva.", gl2t: "Sistema / Sviluppo", gl2d: "Giocare più numeri in combinazioni per coprire più possibilità.", gl3t: "Bonus", gl3d: "Numero extra estratto che aumenta i premi in alcune categorie.", gl4t: "Jackpot", gl4d: "Il premio massimo, vinto indovinando tutti i numeri." });
+Object.assign(STR.pt, { real_window: "dados reais · últimos {0} sorteios", illus_note: "valores ilustrativos" });
+Object.assign(STR.en, { real_window: "real data · last {0} draws", illus_note: "illustrative values" });
+Object.assign(STR.es, { real_window: "datos reales · últimos {0} sorteos", illus_note: "valores ilustrativos" });
+Object.assign(STR.fr, { real_window: "données réelles · {0} derniers tirages", illus_note: "valeurs illustratives" });
+Object.assign(STR.de, { real_window: "echte Daten · letzte {0} Ziehungen", illus_note: "illustrative Werte" });
+Object.assign(STR.it, { real_window: "dati reali · ultime {0} estrazioni", illus_note: "valori illustrativi" });
 
 // ═══════════════════════════════════════════════════════════════
 // DADOS DAS LOTERIAS & HELPERS
@@ -305,32 +311,36 @@ function binom(n, k) {
 // ═══════════════════════════════════════════════════════════════
 // LIGAÇÃO AOS RESULTADOS REAIS (servidor)
 // ═══════════════════════════════════════════════════════════════
-// Em testes (servidor a correr no teu computador):
 const RESULTS_URL = "https://lotterypro-servidor-production.up.railway.app/api/resultados";
-// No lançamento, troca pelo endereço do Railway, ex:
-// const RESULTS_URL = "https://o-meu-servidor.up.railway.app/api/resultados";
 
-function useResultados() {
-  const [reais, setReais] = useState(null);
-  useEffect(() => {
-    let vivo = true;
-    fetch(RESULTS_URL)
-      .then(r => r.json())
-      .then(d => { if (vivo && d && d.ok) setReais(d.resultados); })
-      .catch(() => { /* servidor em baixo ou bloqueado: ficamos com os exemplos */ });
-    return () => { vivo = false; };
-  }, []);
-  // Junta os resultados reais por cima da lista LOTS de exemplo.
+// Contexto que partilha os dados reais (resultados + frequência) com todo o site.
+const LiveContext = createContext({ live: null });
+function useLive() { return useContext(LiveContext); }
+
+// Junta os resultados reais por cima da lista LOTS de exemplo.
+function mergeLots(live) {
   return LOTS.map(lot => {
-    const r = reais && reais.find(x => x.id === lot.id);
+    const r = live && live.find(x => x.id === lot.id);
     if (!r) return lot;
     return {
       ...lot,
       nums: r.nums && r.nums.length ? r.nums.map(Number) : lot.nums,
       extra: r.extra && r.extra.length ? r.extra.map(Number) : lot.extra,
       jack: r.jack || lot.jack,
+      freq: r.freq || null,
+      atraso: r.atraso || null,
+      janela: r.janela || null,
     };
   });
+}
+
+// Usado pelo Home: devolve a lista de loterias já com os resultados reais.
+function useResultados() { const { live } = useLive(); return mergeLots(live); }
+
+// Devolve a entrada viva (com freq/atraso reais) de UMA loteria, ou null.
+function useLotLive(lotId) {
+  const { live } = useLive();
+  return (live && live.find(x => x.id === lotId)) || null;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -603,12 +613,17 @@ function Countdown() {
 function Trends({ lotId }) {
   const { t } = useT();
   const lot = LOTS.find(l => l.id === lotId);
-  const data = useMemo(() => range(lot.max).map(n => ({ n, v: Math.round(50 + (sr(n, lotId.length + 5) - 0.5) * 44) })), [lotId, lot.max]);
+  const liveR = useLotLive(lotId);
+  const real = !!(liveR && liveR.freq);
+  const data = useMemo(() => {
+    if (real) return range(lot.max).map(n => ({ n, v: liveR.freq[n] || 0 }));
+    return range(lot.max).map(n => ({ n, v: Math.round(50 + (sr(n, lotId.length + 5) - 0.5) * 44) }));
+  }, [lotId, lot.max, real, liveR]);
   const maxV = Math.max(...data.map(x => x.v));
   const minV = Math.min(...data.map(x => x.v));
   return (
     <div>
-      <Card style={{ marginBottom: 8, padding: "6px 10px" }}><div style={{ fontSize: 10, color: "var(--tx1)" }}>{t("tr_desc")}</div></Card>
+      <Card style={{ marginBottom: 8, padding: "6px 10px" }}><div style={{ fontSize: 10, color: "var(--tx1)" }}>{t("tr_desc")}{real ? " · " + fmt(t("real_window"), liveR.janela || 50) : " · " + t("illus_note")}</div></Card>
       <Card>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 150, overflowX: "auto", paddingBottom: 4 }}>
           {data.map(x => {
@@ -1249,11 +1264,29 @@ function Home() {
 function Strategy({ lotId, setLot }) {
   const { t } = useT();
   const lot = LOTS.find(l => l.id === lotId);
+  const liveR = useLotLive(lotId);
   const [tab, setTab] = useState("freq");
   const [ordCampo, setOrdCampo] = useState("num");
   const [ordDir, setOrdDir] = useState("asc");
-  const freq = useMemo(() => range(lot.max).map(n => ({ n, v: Math.round((362 * lot.bolas / lot.max) + (sr(n, lotId.length) - 0.5) * 20) })), [lotId, lot.max, lot.bolas]);
-  const atraso = useMemo(() => range(lot.max).map(n => ({ n, a: Math.round(sr(n, lotId.length + 1) * 28) })), [lotId, lot.max]);
+  const realFreq = !!(liveR && liveR.freq);
+  const realAtraso = !!(liveR && liveR.atraso);
+  const freq = useMemo(() => {
+    if (realFreq) return range(lot.max).map(n => ({ n, v: liveR.freq[n] || 0 }));
+    return range(lot.max).map(n => ({ n, v: Math.round((362 * lot.bolas / lot.max) + (sr(n, lotId.length) - 0.5) * 20) }));
+  }, [lotId, lot.max, lot.bolas, realFreq, liveR]);
+  const atraso = useMemo(() => {
+    if (realAtraso) return range(lot.max).map(n => ({ n, a: liveR.atraso[n] != null ? liveR.atraso[n] : 0 }));
+    return range(lot.max).map(n => ({ n, a: Math.round(sr(n, lotId.length + 1) * 28) }));
+  }, [lotId, lot.max, realAtraso, liveR]);
+  const hotCold = useMemo(() => {
+    if (realFreq) {
+      const arr = range(lot.max).map(n => ({ n, v: liveR.freq[n] || 0 }));
+      const hot = [...arr].sort((a, b) => b.v - a.v).slice(0, 10).map(x => x.n);
+      const cold = [...arr].sort((a, b) => a.v - b.v).slice(0, 10).map(x => x.n);
+      return { hot, cold, real: true };
+    }
+    return { hot: HOT[lotId], cold: COLD[lotId], real: false };
+  }, [lotId, lot.max, realFreq, liveR]);
   const sortedFreq = useMemo(() => { const s = [...freq]; s.sort((a, b) => ordCampo === "num" ? (ordDir === "asc" ? a.n - b.n : b.n - a.n) : (ordDir === "asc" ? a.v - b.v : b.v - a.v)); return s; }, [freq, ordCampo, ordDir]);
   const sortedAtraso = useMemo(() => { const s = [...atraso]; s.sort((a, b) => ordCampo === "num" ? (ordDir === "asc" ? a.n - b.n : b.n - a.n) : (ordDir === "asc" ? a.a - b.a : b.a - a.a)); return s; }, [atraso, ordCampo, ordDir]);
   const pares = lot.nums.filter(n => n % 2 === 0);
@@ -1279,7 +1312,7 @@ function Strategy({ lotId, setLot }) {
       )}
       {tab === "freq" && (
         <div>
-          <Card style={{ marginBottom: 8, padding: "6px 10px" }}><div style={{ fontSize: 10, color: "var(--tx1)" }}>{fmt(t("s_freqEx"), freq[0].v)}</div></Card>
+          <Card style={{ marginBottom: 8, padding: "6px 10px" }}><div style={{ fontSize: 10, color: "var(--tx1)" }}>{fmt(t("s_freqEx"), freq[0].v)}{realFreq ? " · " + fmt(t("real_window"), liveR.janela || 50) : " · " + t("illus_note")}</div></Card>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
               <thead><tr style={{ background: "var(--bg2)" }}>{range(10).map(i => <th key={i} style={{ padding: "5px 3px", textAlign: "center", border: "1px solid var(--ovB)", color: "var(--tx1)", fontWeight: 600, fontSize: 9 }}>{t("col_n")}<br />{t("s_qty")}</th>)}</tr></thead>
@@ -1295,7 +1328,7 @@ function Strategy({ lotId, setLot }) {
       )}
       {tab === "atraso" && (
         <div>
-          <Card style={{ marginBottom: 8, padding: "6px 10px" }}><div style={{ fontSize: 10, color: "var(--tx1)" }}>{t("s_delayDesc")} <span style={{ color: "#3fb950" }}>■</span> {t("s_recent")} <span style={{ color: "#f5c518" }}>■</span> {t("s_med")} <span style={{ color: "#f85149" }}>■</span> {t("s_late")}</div></Card>
+          <Card style={{ marginBottom: 8, padding: "6px 10px" }}><div style={{ fontSize: 10, color: "var(--tx1)" }}>{t("s_delayDesc")} <span style={{ color: "#3fb950" }}>■</span> {t("s_recent")} <span style={{ color: "#f5c518" }}>■</span> {t("s_med")} <span style={{ color: "#f85149" }}>■</span> {t("s_late")}{realAtraso ? " · " + fmt(t("real_window"), liveR.janela || 50) : " · " + t("illus_note")}</div></Card>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
               <thead><tr style={{ background: "var(--bg2)" }}>{range(10).map(i => <th key={i} style={{ padding: "5px 3px", textAlign: "center", border: "1px solid var(--ovB)", color: "var(--tx1)", fontWeight: 600, fontSize: 9 }}>{t("col_n")}<br />{t("s_delay")}</th>)}</tr></thead>
@@ -1313,9 +1346,12 @@ function Strategy({ lotId, setLot }) {
       {tab === "check" && <Checker lotId={lotId} setLot={setLot} />}
       {tab === "samenum" && <SameNumber />}
       {tab === "hot" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <Card><STitle c="#f85149" i="🔥">{t("s_hotT")}</STitle><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{HOT[lotId].map(n => <Ball key={n} n={n} c="#7f1d1d" s={26} />)}</div><div style={{ fontSize: 10, color: "var(--tx1)", marginTop: 4 }}>{t("s_most")}</div></Card>
-          <Card><STitle c="#79c0ff" i="❄️">{t("s_coldT")}</STitle><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{COLD[lotId].map(n => <Ball key={n} n={n} c="#0d1f3a" s={26} />)}</div><div style={{ fontSize: 10, color: "var(--tx1)", marginTop: 4 }}>{t("s_least")}</div></Card>
+        <div>
+          <Card style={{ marginBottom: 8, padding: "6px 10px" }}><div style={{ fontSize: 10, color: "var(--tx1)" }}>{hotCold.real ? fmt(t("real_window"), liveR.janela || 50) : t("illus_note")}</div></Card>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <Card><STitle c="#f85149" i="🔥">{t("s_hotT")}</STitle><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{hotCold.hot.map(n => <Ball key={n} n={n} c="#7f1d1d" s={26} />)}</div><div style={{ fontSize: 10, color: "var(--tx1)", marginTop: 4 }}>{t("s_most")}</div></Card>
+            <Card><STitle c="#79c0ff" i="❄️">{t("s_coldT")}</STitle><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{hotCold.cold.map(n => <Ball key={n} n={n} c="#0d1f3a" s={26} />)}</div><div style={{ fontSize: 10, color: "var(--tx1)", marginTop: 4 }}>{t("s_least")}</div></Card>
+          </div>
         </div>
       )}
       {tab === "pi" && (
@@ -1804,14 +1840,25 @@ function AppInner() {
 export default function LotteryPro() {
   const [lang, setLang] = useState(detectLang());
   const [theme, setTheme] = useState("dark");
+  const [live, setLive] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    fetch(RESULTS_URL)
+      .then(r => r.json())
+      .then(d => { if (vivo && d && d.ok) setLive(d.resultados); })
+      .catch(() => { /* servidor em baixo ou bloqueado: ficamos com os exemplos */ });
+    return () => { vivo = false; };
+  }, []);
   const pal = THEMES[theme] || THEMES.dark;
   const value = { lang, setLang, t: makeT(lang), theme, setTheme };
   const vars = { "--bg0": pal.bg0, "--bg1": pal.bg1, "--bg2": pal.bg2, "--tx0": pal.tx0, "--tx1": pal.tx1, "--tx2": pal.tx2, "--tx3": pal.tx3, "--bd0": pal.bd0, "--ovB": pal.ovB, "--ovR": pal.ovR };
   return (
     <I18nContext.Provider value={value}>
-      <div style={vars}>
-        <AppInner />
-      </div>
+      <LiveContext.Provider value={{ live }}>
+        <div style={vars}>
+          <AppInner />
+        </div>
+      </LiveContext.Provider>
     </I18nContext.Provider>
   );
 }
